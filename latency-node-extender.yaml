@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: latency-node-extender
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: latency-node-extender
+  template:
+    metadata:
+      labels:
+        app: latency-node-extender
+    spec:
+      containers:
+      - name: latency-node-extender
+        image: your-docker-username/latency-node-extender:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
