@@ -3,12 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
-	"strconv"
 
 	"github.com/gorilla/mux"
+	v1 "k8s.io/api/core/v1"
 	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 )
 
@@ -45,7 +43,7 @@ func (e *LatencyExtender) Prioritize(args schedulerapi.ExtenderArgs) *schedulera
 		if err == nil {
 			priorities[i] = schedulerapi.HostPriority{
 				Host:  node.Name,
-				Score: int(50 - latency), // Assumiamo un limite di latenza di 50 ms
+				Score: int64(50 - latency), // Assumiamo un limite di latenza di 50 ms
 			}
 		} else {
 			priorities[i] = schedulerapi.HostPriority{
@@ -68,8 +66,33 @@ func main() {
 
 	latencyExtender := &LatencyExtender{}
 
-	router.HandleFunc("/filter", latencyExtender.Filter).Methods("POST")
-	router.HandleFunc("/prioritize", latencyExtender.Prioritize).Methods("POST")
+	router.HandleFunc("/filter", func(w http.ResponseWriter, r *http.Request) {
+		var args schedulerapi.ExtenderArgs
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		result := latencyExtender.Filter(args)
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}).Methods("POST")
+
+	router.HandleFunc("/prioritize", func(w http.ResponseWriter, r *http.Request) {
+		var args schedulerapi.ExtenderArgs
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		result := latencyExtender.Prioritize(args)
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}).Methods("POST")
 
 	port := 8080
 	fmt.Printf("Starting server on port %d...\n", port)
