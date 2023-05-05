@@ -64,4 +64,19 @@ spec:
       labels:
         component: custom-scheduler
     spec:
-      serviceAccountName
+      serviceAccountName: custom-scheduler
+      containers:
+        - name: custom-scheduler
+          image: k8s.gcr.io/kube-scheduler:v1.22.0
+          args:
+            - --config=/etc/kubernetes/custom-scheduler-config/policy.cfg
+            - --leader-elect=false
+            - --scheduler-name=custom-scheduler
+          volumeMounts:
+            - name: custom-scheduler-config
+              mountPath: /etc/kubernetes/custom-scheduler-config
+              readOnly: true
+      volumes:
+        - name: custom-scheduler-config
+          configMap:
+            name: custom-scheduler-config

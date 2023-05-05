@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: latency-sentinel
+  labels:
+    app: latency-sentinel
+spec:
+  selector:
+    matchLabels:
+      name: latency-sentinel
+  template:
+    metadata:
+      labels:
+        name: latency-sentinel
+    spec:
+      containers:
+      - name: sentinel
+        image: your-sentinel-image
+        ports:
+        - containerPort: 8080

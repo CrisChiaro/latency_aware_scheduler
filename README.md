@@ -5,19 +5,22 @@ Questo esempio dimostra come creare un custom scheduler per Kubernetes che progr
 
 ## Descrizione dei file
 
-### 1. latency-node-extender.yaml
+### 1. latency-sentinel.yaml
+Questo file definisce il DemonSet (pod distribuito su tutti i nodi del cluster) costituito da un container che si occupa di calcolare la latenza di rete tra il nodo in cui si trova e l'utente che sta usufruendo del servizio tramite lo stesso nodo.
+
+### 2. latency-node-extender.yaml
 
 Questo file definisce il Deployment per l'estensione del nodo che calcola la latenza di rete tra l'utente e il nodo. L'estensione del nodo viene eseguita come un singolo pod nel cluster. L'immagine Docker utilizzata in questo file deve essere compilata e caricata da te su un registro di container come Docker Hub o Google Container Registry.
 
-### 2. latency-node-extender-service.yaml
+### 3. latency-node-extender-service.yaml
 
 Questo file definisce il servizio che espone l'estensione del nodo. Il servizio utilizza il selettore `app: latency-node-extender` per indirizzare il traffico verso il pod dell'estensione del nodo. Il servizio viene esposto sulla porta 8080.
 
-### 3. main.go
+### 4. main.go
 
 Questo file contiene il codice Go per l'estensione del nodo. Calcola la latenza di rete tra l'utente e il nodo e assegna un punteggio ai nodi in base alla latenza. Il punteggio viene utilizzato dal custom scheduler per decidere quale nodo scegliere per l'allocazione dei Pods.
 
-### 4. custom-scheduler.yaml
+### 5. custom-scheduler.yaml
 
 Questo file definisce la configurazione, il ServiceAccount, il ClusterRoleBinding e il Deployment per il custom scheduler. Il custom scheduler utilizza l'estensione del nodo per filtrare e dare priorità ai nodi in base alla latenza di rete.
 

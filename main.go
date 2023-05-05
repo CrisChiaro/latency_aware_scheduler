@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	v1 "k8s.io/api/core/v1"
@@ -58,7 +60,23 @@ func (e *LatencyExtender) Prioritize(args schedulerapi.ExtenderArgs) *schedulera
 
 func getLatencyForNode(nodeName string) (int, error) {
 	// Implementare la logica per ottenere la latenza di rete per il nodo
-	return 0, nil
+	resp, err := http.Get(fmt.Sprintf("http://%s:8080/latency", nodeName))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	latency, err := strconv.Atoi(string(body))
+	if err != nil {
+		return 0, err
+	}
+
+	return latency, nil
 }
 
 func main() {
