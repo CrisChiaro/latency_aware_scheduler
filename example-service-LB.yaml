@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  selector:
+    app: my-app
+  ports:
+    - name: app
+      protocol: TCP
+      port: 80
+      targetPort: 8081
+    - name: latency-measurer
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer

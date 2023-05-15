@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latency-aware-scheduler
+  namespace: kube-system
+  labels:
+    component: latency-aware-scheduler
+spec:
+  serviceAccountName: custom-scheduler
+  containers:
+  - name: latency-aware-scheduler
+    image: crischiaro/latency-aware-scheduler:latest
+    command:
+    - ./custom-scheduler
+    args:
+    - --kubeconfig
+    - /etc/kubernetes/scheduler.conf
+    volumeMounts:
+    - name: kubeconfig
+      mountPath: /etc/kubernetes/scheduler.conf
+      readOnly: true
+  hostNetwork: true
+  volumes:
+  - name: kubeconfig
+    hostPath:
+      path: /etc/kubernetes/scheduler.conf
+      type: FileOrCreate
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+  tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
