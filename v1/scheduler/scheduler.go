@@ -19,10 +19,10 @@ type CustomScheduler struct {
 	queue              workqueue.RateLimitingInterface
 	informer           cache.SharedIndexInformer
 	visitedNodesPerApp map[string]map[string]bool
-	pauseDescheduler   chan bool
+	pauseDescheduler   chan PauseSignal
 }
 
-func NewCustomScheduler(clientset *kubernetes.Clientset, pauseDescheduler chan bool) *CustomScheduler {
+func NewCustomScheduler(clientset *kubernetes.Clientset, pauseDescheduler chan PauseSignal) *CustomScheduler {
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
@@ -76,38 +76,38 @@ func (s *CustomScheduler) Run() {
 		func() {
 			defer s.queue.Done(key)
 			fmt.Printf("Processing pod: %s\n", key) //debug
-			stopDescheduler, err := s.schedulePod(key.(string))
+			err := s.schedulePod(key.(string))
 			if err != nil {
 				fmt.Printf("Error scheduling pod: %v\n", err)
 				s.queue.AddRateLimited(key)
 			} else {
 				s.queue.Forget(key)
 			}
-
-			if stopDescheduler {
-				s.pauseDescheduler <- true
-			} else {
-				s.pauseDescheduler <- false
-			}
+			/*
+				if stopDescheduler {
+					s.pauseDescheduler <- true
+				} else {
+					s.pauseDescheduler <- false
+				}*/
 		}()
 	}
 }
 
-func (s *CustomScheduler) schedulePod(key string) (bool, error) {
+func (s *CustomScheduler) schedulePod(key string) error {
 	// Ottieni il pod associato alla chiave
 	pod, exists, err := s.informer.GetStore().GetByKey(key)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if !exists {
-		return false, nil
+		return nil
 	}
 
 	// Scegli un nodo sul quale pianificare il pod
-	node, stopDescheduler, err := s.chooseNodeForPod(pod.(*v1.Pod))
+	node, err := s.chooseNodeForPod(pod.(*v1.Pod))
 	if err != nil {
-		return stopDescheduler, err
+		return err
 	}
 
 	// Assegna il pod al nodo scelto
@@ -116,36 +116,36 @@ func (s *CustomScheduler) schedulePod(key string) (bool, error) {
 	// Aggiorna le informazioni sul nodo nel tuo elenco di nodi
 	updatedNode, err := s.clientset.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
 	if err != nil {
-		return stopDescheduler, err
+		return err
 	}
 	*node = *updatedNode
-	return stopDescheduler, err
+	return err
 }
 
-func (s *CustomScheduler) chooseNodeForPod(pod *v1.Pod) (*v1.Node, bool, error) {
+func (s *CustomScheduler) chooseNodeForPod(pod *v1.Pod) (*v1.Node, error) {
 	nodes, err := s.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	nodesToConsider := nodes.Items
 
 	if len(nodesToConsider) == 0 {
-		return nil, false, fmt.Errorf("no nodes available")
+		return nil, fmt.Errorf("no nodes available")
 	}
 
-	selectedNode, stopDescheduler, err := s.getBestNode(pod, nodesToConsider)
+	selectedNode, err := s.getBestNode(pod, nodesToConsider)
 	fmt.Println("BESTNODE: ", selectedNode.Name) //DEBUG
-	return selectedNode, stopDescheduler, err
+	return selectedNode, err
 }
 
-func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, bool, error) {
+func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, error) {
 	var bestNode *v1.Node
 	var bestScore float64
 
 	appName, ok := pod.Labels["app"]
 	if !ok {
-		return nil, false, fmt.Errorf("unable to determine app name from pod labels")
+		return nil, fmt.Errorf("unable to determine app name from pod labels")
 	}
 	//DEBUG
 	fmt.Println("\nAppName: ", appName)
@@ -181,9 +181,6 @@ func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, b
 		}
 	}
 
-	// Verifica se il descheduler deve essere bloccato
-	stopDescheduler := s.shouldPauseDescheduler() //TODO: Da sistemare
-
 	if bestNode == nil {
 		// Se tutti i nodi sono stati visitati, ripristina l'elenco dei nodi visitati e riprova
 		delete(s.visitedNodesPerApp, appName)
@@ -191,9 +188,15 @@ func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, b
 	} else {
 		s.visitedNodesPerApp[appName][bestNode.Name] = true
 	}
+
+	// Verifica se il descheduler deve essere bloccato
+	err := s.shouldPauseDescheduler(appName) //TODO: Da sistemare
+	if err != nil {
+		return nil, fmt.Errorf("Error in pause scheduler: %v", err)
+	}
 	fmt.Println() //DEBUG
 	fmt.Println("BestNode Totale: ", bestNode.Name)
-	return bestNode, stopDescheduler, nil
+	return bestNode, nil
 }
 
 func getNodeScore(node v1.Node) float64 {
@@ -233,11 +236,11 @@ func (s *CustomScheduler) assignPodToNode(pod *v1.Pod, node *v1.Node) error {
 	return nil
 }
 
-func (s *CustomScheduler) shouldPauseDescheduler() bool {
+func (s *CustomScheduler) shouldPauseDescheduler(appName string) error {
 	nodes, err := s.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return false
+	if len(s.visitedNodesPerApp[appName]) == len(nodes.Items)-1 { //-1 perchè non devo considerare il control-node
+		fmt.Println("SCHEDULER: TUTTI NODI VISITATI, BLOCCO DESCHEDULER PER L'APP: ", appName) //DEBUG
+		s.pauseDescheduler <- PauseSignal{isPaused: true, appName: appName}
 	}
-
-	return len(s.visitedNodesPerApp) == len(nodes.Items)-1
+	return err
 }

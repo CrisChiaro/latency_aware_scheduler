@@ -1,22 +1,23 @@
-apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: my-app
+  name: app-deployment
 spec:
-  replicas: 1
   selector:
     matchLabels:
-      app: my-app
+      app: myapp
+  replicas: 2
   template:
     metadata:
       labels:
-        app: my-app
+        app: myapp
     spec:
+      serviceAccountName: latency-measurer
+      schedulerName: latency-aware-scheduler
       containers:
-      - name: my-app
-        image: my-app-image
+      - name: mynginx
+        image: myapp-img
         ports:
-        - containerPort: 8081
+        - containerPort: 80
         env:
         - name: POD_NAME
           valueFrom:
@@ -27,7 +28,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
       - name: latency-measurer
-        image: latency-measurer-image
+        image: crischiaro/latency-meter:latest
         ports:
         - containerPort: 8080
         env:

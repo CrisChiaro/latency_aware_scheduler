@@ -9,6 +9,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+type PauseSignal struct {
+	isPaused bool
+	appName  string
+}
+
 func main() {
 	fmt.Println("Starting custom scheduler...")
 	var kubeconfigPath string
@@ -32,7 +37,7 @@ func main() {
 		return
 	}
 
-	pauseDescheduler := make(chan bool)
+	pauseDescheduler := make(chan PauseSignal)
 	customScheduler := NewCustomScheduler(clientset, pauseDescheduler)
 	latencyMeasurements := NewLatencyMeasurements()
 	descheduler := NewDescheduler(clientset, latencyMeasurements, pauseDescheduler)
