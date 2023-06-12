@@ -11,7 +11,7 @@ spec:
       labels:
         app: myapp
     spec:
-      serviceAccountName: latency-measurer
+      serviceAccountName: latency-meter
       schedulerName: latency-aware-scheduler
       containers:
       - name: mynginx
@@ -27,7 +27,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-      - name: latency-measurer
+      - name: latency-meter
         image: crischiaro/latency-meter:latest
         ports:
         - containerPort: 8080
