@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <div id="serverResponse"></div>
+    <h2>Latency Measurement Client</h2>
+    <button onclick="measureLatency()">Measure Latency</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+    <script>
+        const serverUrl = 'http://localhost:8080';  // service URL (with ngrok tunneling)
+
+        async function measureLatency() {
+            const start = performance.now();
+            let userID = localStorage.getItem('userID');
+            if (!userID) {
+                userID = uuid.v4();
+                localStorage.setItem('userID', userID);
+            }
+
+            // Aggiungi un parametro di query univoco per evitare il riutilizzo della connessione
+            const uniqueQuery = `unique=${Math.random()}`;
+
+            const clientTimestamp = Date.now(); // Current time in milliseconds
+
+            try {
+                /* ANOTHER WAY TO CALCULATE LATENCY
+                let response = await fetch(serverUrl + '/latency?' + uniqueQuery, {
+                    method: 'GET',
+                });
+
+                const end = performance.now();
+                const latency = Math.floor(end - start);
+                console.log('Latency: ' + latency + 'ms');
+                */
+                // Invia la latenza al server come parametro di query
+                const params = new URLSearchParams();
+                params.append('id', userID);
+                // params.append('latency', latency);
+
+                response = await fetch(`${serverUrl}?${params.toString()}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Timestamp': clientTimestamp.toString(), // Send client timestamp in header
+                    },
+                });
+                //console.log('Latency sent to server');
+                if (response.ok) {
+                    const text = await response.text();
+                    document.getElementById('serverResponse').innerHTML = text;
+                    console.log('Response received');
+                } else {
+                    console.log('Error server:', response.status);
+                }
+            } catch (err) {
+                console.error('Error measuring latency:', err);
+            }
+        }
+    </script>
+
+</body>
+
+</html>

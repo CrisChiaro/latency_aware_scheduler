@@ -7,14 +7,14 @@ import (
 
 type LatencyMeasurement struct {
 	PodNamespace string
-	NodeName     string
+	PodName      string
 	Measurement  int64
 	Timestamp    time.Time
 }
 
 type LatencyMeasurements struct {
 	sync.RWMutex
-	data map[string]map[string]map[string]*LatencyMeasurement // userID -> appName -> podID -> LatencyMeasurement
+	data map[string]map[string]map[string]*LatencyMeasurement // userID -> appName -> nodeName -> LatencyMeasurement
 }
 
 func NewLatencyMeasurements() *LatencyMeasurements {
@@ -23,7 +23,7 @@ func NewLatencyMeasurements() *LatencyMeasurements {
 	}
 }
 
-func (l *LatencyMeasurements) AddLatency(userID, appName, podName string, measurement *LatencyMeasurement) {
+func (l *LatencyMeasurements) AddLatency(userID, appName, nodeName string, measurement *LatencyMeasurement) {
 	l.Lock()
 	defer l.Unlock()
 	userMeasurements, ok := l.data[userID]
@@ -36,15 +36,19 @@ func (l *LatencyMeasurements) AddLatency(userID, appName, podName string, measur
 		appMeasurements = make(map[string]*LatencyMeasurement)
 		userMeasurements[appName] = appMeasurements
 	}
-	appMeasurements[podName] = measurement
+
+	existingMeasurement, ok := appMeasurements[nodeName]
+	if !ok || existingMeasurement.Timestamp.Before(measurement.Timestamp) {
+		appMeasurements[nodeName] = measurement
+	}
 }
 
-func (l *LatencyMeasurements) DeleteLatency(userID, appName, podName string) {
+func (l *LatencyMeasurements) DeleteLatency(userID, appName, nodeName string) {
 	l.Lock()
 	defer l.Unlock()
 	if userMeasurements, ok := l.data[userID]; ok {
 		if appMeasurements, ok := userMeasurements[appName]; ok {
-			delete(appMeasurements, podName)
+			delete(appMeasurements, nodeName)
 		}
 	}
 }
@@ -57,9 +61,9 @@ func (l *LatencyMeasurements) GetMeasurements() map[string]map[string]map[string
 
 func (l *LatencyMeasurements) UpdateMeasurements(newMeasurements map[string]map[string]map[string]*LatencyMeasurement) {
 	for userID, appMeasurements := range newMeasurements {
-		for appName, podMeasurements := range appMeasurements {
-			for podName, measurement := range podMeasurements {
-				l.AddLatency(userID, appName, podName, measurement)
+		for appName, nodeMeasurements := range appMeasurements {
+			for nodeName, measurement := range nodeMeasurements {
+				l.AddLatency(userID, appName, nodeName, measurement)
 			}
 		}
 	}

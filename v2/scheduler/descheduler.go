@@ -45,7 +45,7 @@ func (d *Descheduler) Run() {
 	for {
 		time.Sleep(checkInterval)
 
-		//Controllo cancale per vedere se andare in pausa o meno
+		//Controllo canale per vedere se andare in pausa o meno
 		select {
 		case pauseSignal := <-d.pauseDescheduler: //modo per leggere un canale
 			if pauseSignal.isPaused {
@@ -70,7 +70,7 @@ func (d *Descheduler) Run() {
 
 		for userID, appMeasurements := range d.latencyMeasurements.GetMeasurements() {
 			fmt.Println("User: ", userID) //DEBUG
-			for appName, podMeasurements := range appMeasurements {
+			for appName, nodeMeasurements := range appMeasurements {
 				fmt.Println("App: ", appName) //DEBUG
 				/*SKIPPA SE APP COMPLETATA*/
 				if _, ok := d.pausedApps[appName]; ok {
@@ -83,29 +83,22 @@ func (d *Descheduler) Run() {
 					return
 				}
 				fmt.Println("Descheduling Threshold: ", descheduleThreshold) //DEBUG
-				if len(podMeasurements) >= descheduleThreshold {
-					// Get the worst performing pod
-					worstPodName, worstMeasurement := d.findWorstPod(podMeasurements)
+				if len(nodeMeasurements) >= descheduleThreshold {
+					// Get the worst performing node for the user
+					worstNodeName, worstMeasurement := d.findWorstNode(nodeMeasurements)
 
-					// Deschedule the worst performing pod
-					pod, err := d.clientset.CoreV1().Pods(worstMeasurement.PodNamespace).Get(context.Background(), worstPodName, metav1.GetOptions{})
+					err = d.DescheduleAllPodsPerNode(appName, worstNodeName)
 					if err != nil {
-						fmt.Printf("Error in getting pod %s: %v\n", worstPodName, err)
-						continue
-					}
-
-					err = d.clientset.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
-					if err != nil {
-						fmt.Printf("Error in deleting pod %s: %v\n", pod.Name, err)
+						fmt.Printf("Error descheduling all pods in the Node %s: %v\n", worstNodeName, err)
 					} else {
-						fmt.Printf("Descheduled pod %s with latency %d ms\n", pod.Name, worstMeasurement.Measurement)
-						d.latencyMeasurements.DeleteLatency(userID, appName, worstPodName)
+						fmt.Printf("Descheduled pods in the Node %s with latency %d ms\n", worstNodeName, worstMeasurement.Measurement)
+						d.latencyMeasurements.DeleteLatency(userID, appName, worstNodeName)
 						appPastMis, ok := d.pastMeasurements[appName]
 						if !ok {
 							appPastMis = make(map[string]int64)
 							d.pastMeasurements[appName] = appPastMis
 						}
-						d.pastMeasurements[appName][worstMeasurement.NodeName] = worstMeasurement.Measurement //save measurement for last scheduling
+						d.pastMeasurements[appName][worstNodeName] = worstMeasurement.Measurement //save measurement for last scheduling
 					}
 				}
 				fmt.Println() //DEBUG
@@ -125,7 +118,7 @@ func (d *Descheduler) getLatencyMeasurements() (map[string]map[string]map[string
 
 	for _, pod := range pods.Items {
 		// Add any necessary filters here, e.g., by labels or namespace
-		if pod.Namespace == "kube-system" || strings.HasPrefix(pod.Name, "liqo") || strings.HasPrefix(pod.Name, "virtual-kubelet") || strings.HasPrefix(pod.Name, "local-path-provisioner") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
+		if pod.Namespace == "kube-system" || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
 			continue
 		}
 		endpoint := fmt.Sprintf("http://%s:8080/measurements", pod.Status.PodIP)
@@ -163,31 +156,30 @@ func (d *Descheduler) getLatencyMeasurements() (map[string]map[string]map[string
 			if _, exists := measurements[userID][appName]; !exists {
 				measurements[userID][appName] = make(map[string]*LatencyMeasurement)
 			}
-			measurements[userID][appName][pod.Name] = userMeasurements
+			measurements[userID][appName][pod.Spec.NodeName] = userMeasurements
 		}
 	}
 
 	return measurements, nil
 }
 
-func (d *Descheduler) findWorstPod(podMeasurements map[string]*LatencyMeasurement) (string, *LatencyMeasurement) {
-	var worstPodName string
+func (d *Descheduler) findWorstNode(nodeMeasurements map[string]*LatencyMeasurement) (string, *LatencyMeasurement) {
+	var worstNodeName string
 	var worstMeasurement *LatencyMeasurement
-	for podName, measurement := range podMeasurements {
-		fmt.Println("Pod: ", podName)                           //DEBUG
-		fmt.Println("PodNamespace: ", measurement.PodNamespace) //DEBUG
-		fmt.Println("Measurement: ", measurement.Measurement)   //DEBUG
+	for nodeName, measurement := range nodeMeasurements {
+		fmt.Println("Node: ", nodeName)                       //DEBUG
+		fmt.Println("Measurement: ", measurement.Measurement) //DEBUG
 		if worstMeasurement == nil || measurement.Measurement > worstMeasurement.Measurement {
-			worstPodName = podName
+			worstNodeName = nodeName
 			worstMeasurement = measurement
 		} else if measurement.Measurement == worstMeasurement.Measurement {
 			if measurement.Timestamp.Before(worstMeasurement.Timestamp) {
-				worstPodName = podName
+				worstNodeName = nodeName
 				worstMeasurement = measurement
 			}
 		}
 	}
-	return worstPodName, worstMeasurement
+	return worstNodeName, worstMeasurement
 }
 
 func (d *Descheduler) GetDescheduleThreshold(appName string) (int, error) {
@@ -210,7 +202,7 @@ func (d *Descheduler) GetDescheduleThreshold(appName string) (int, error) {
 	}
 	fmt.Println("Calculating descheduling threshold for the app: ", appName) //DEBUG
 	for _, n := range nsList.Items {
-		if n.Name == "kube-system" {
+		if n.Name == "kube-system" || strings.HasPrefix(n.Name, "liqo") || strings.HasPrefix(n.Name, "metallb") {
 			continue
 		}
 
@@ -256,4 +248,35 @@ func (d *Descheduler) GetDescheduleThreshold(appName string) (int, error) {
 	}
 	// if I'm here I didn't find the app!
 	return -1, fmt.Errorf("App not found!")
+}
+
+func (d *Descheduler) DescheduleAllPodsPerNode(appName string, nodeName string) error {
+	// Get the list of pods on the worst performing node
+	pods, err := d.clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range pods.Items {
+		// Add any necessary filters here, e.g., by labels or namespace
+		if pod.Namespace == "kube-system" || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
+			continue
+		}
+		// Check if the pod's deletion policy allows it to be deleted. If not, skip to the next pod.
+		if pod.DeletionGracePeriodSeconds != nil && *pod.DeletionGracePeriodSeconds != 0 {
+			continue
+		}
+
+		err = d.clientset.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			// Log error and continue with next pod
+			fmt.Println("Failed to delete pod", pod.Name, "with error", err.Error())
+			continue
+		}
+		fmt.Println("Successfully deleted pod", pod.Name)
+	}
+	return nil
 }

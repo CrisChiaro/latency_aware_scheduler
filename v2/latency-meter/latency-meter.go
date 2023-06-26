@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -19,11 +21,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var appAddress string
-
 type LatencyMeasurement struct {
 	PodNamespace string
-	NodeName     string
+	PodName      string
 	Measurement  int64
 	Timestamp    time.Time
 }
@@ -37,35 +37,16 @@ func NewLatencyMeasurements() *LatencyMeasurements {
 		data: make(map[string]*LatencyMeasurement),
 	}
 }
+func (l *LatencyMeasurements) Data() map[string]*LatencyMeasurement {
+	return l.data
+}
 
 func (l *LatencyMeasurements) AddLatency(userID string, measurement *LatencyMeasurement) {
 	l.data[userID] = measurement
 }
 
-func latencyMiddleware(next http.Handler, pod *v1.Pod, latencyMeasurements *LatencyMeasurements) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Misuring latency...") //DEBUG
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		latency := time.Since(start).Milliseconds()
-
-		//TEMPORANEO: USO L'IP COME IDENTIFICATIVO
-		host, _, err := net.SplitHostPort(r.RemoteAddr) // Estrai l'indirizzo IP del client dalla richiesta
-		if err != nil {
-			fmt.Printf("Error splitting host and port from RemoteAddr: %v\n", err)
-			return
-		}
-		userID := host // Utilizza l'indirizzo IP del client come identificativo dell'utente
-		// Estrai l'indirizzo IP del client dalla richiesta                                                             // Utilizza l'indirizzo IP del client come identificativo dell'utente
-		fmt.Println("Latency calculated!\tlatency: ", latency, "\tuserID(IP): ", userID, "\tPodNamespace: ", pod.Namespace) //DEBUG
-
-		latencyMeasurements.AddLatency(userID, &LatencyMeasurement{
-			PodNamespace: pod.Namespace,
-			NodeName:     pod.Spec.NodeName,
-			Measurement:  latency,
-			Timestamp:    time.Now(),
-		})
-	})
+func (l *LatencyMeasurements) Reset() {
+	l.data = make(map[string]*LatencyMeasurement)
 }
 
 func getCurrentPod(clientset *kubernetes.Clientset) (*v1.Pod, error) {
@@ -112,29 +93,67 @@ func getCurrentPod(clientset *kubernetes.Clientset) (*v1.Pod, error) {
 	return pod, nil
 }
 
+/*
+func LatencyCalculated(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+*/
+
+func latencyMiddleware(next http.Handler, pod *v1.Pod, latencyMeasurements *LatencyMeasurements) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		userID := r.URL.Query().Get("id")                 // Extract the userID from the query parameters
+		clientTimestampStr := r.Header.Get("X-Timestamp") // Extract the user timestamp from the header
+
+		// Convert the latency to an integer
+		clientTimestamp, err := strconv.ParseInt(clientTimestampStr, 10, 64)
+		if err != nil {
+			fmt.Println("Error parsing client timestamp. \tuserID: ", userID, "\tClientTimestamp: ", clientTimestampStr) //DEBUG
+		} else {
+			serverTimestamp := time.Now().UnixNano() / int64(time.Millisecond) // Current time in milliseconds
+			latency := serverTimestamp - clientTimestamp
+			fmt.Println("Latency calculated!\tlatency: ", latency, "\tuserID(IP): ", userID, "\tPodNamespace: ", pod.Namespace) //DEBUG
+			latencyMeasurements.AddLatency(userID, &LatencyMeasurement{
+				PodNamespace: pod.Namespace,
+				PodName:      pod.Name,
+				Measurement:  latency,
+				Timestamp:    time.Now(),
+			})
+		}
+
+		fmt.Println("Request to the app") //DEBUG
+		next.ServeHTTP(w, r)
+	})
+}
+
 func measureLatency(clientset *kubernetes.Clientset, latencyMeasurements *LatencyMeasurements) {
 	pod, err := getCurrentPod(clientset)
 	if err != nil {
 		fmt.Printf("Error getting current pod: %v\n", err)
 		return
 	}
-
-	appAddress = "http://localhost:80"
+	appAddress := "http://localhost:80"
 	fmt.Println("Pod Name: ", pod.Name, "\tNamespace: ", pod.Namespace, "\tIP: ", appAddress) //DEBUG
-	mux := http.NewServeMux()
 
-	mux.Handle("/", latencyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/measurements" {
-			fmt.Println("Request to the app") //DEBUG
+	router := mux.NewRouter()
+
+	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization", "X-Timestamp"})
+	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
+	origins := handlers.AllowedOrigins([]string{"*"})
+
+	router.Handle("/", latencyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/measurements" && r.URL.Path != "/latency" {
 			// Proxy the request to the application
 			proxyURL, _ := url.Parse(appAddress)
 			proxy := httputil.NewSingleHostReverseProxy(proxyURL)
 			proxy.ServeHTTP(w, r)
 		}
-	}), pod, latencyMeasurements))
-
-	mux.HandleFunc("/measurements", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/measurements contacted") //DEBUG
+	}), pod, latencyMeasurements)).Methods("GET")
+	//router.HandleFunc("/latency", LatencyCalculated).Methods("GET") //anotherway to mesure latency
+	router.HandleFunc("/measurements", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("/measurements contacted (IP: ", r.RemoteAddr, ")") //DEBUG
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -147,17 +166,13 @@ func measureLatency(clientset *kubernetes.Clientset, latencyMeasurements *Latenc
 
 		w.Write(latencyMeasurementsJSON)
 		latencyMeasurements.Reset()
-	})
+	}).Methods("GET")
 
-	http.ListenAndServe(":8080", mux)
-}
-
-func (l *LatencyMeasurements) Data() map[string]*LatencyMeasurement {
-	return l.data
+	http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(router))
 }
 
 func main() {
-	fmt.Println("Latency Meter started")
+	fmt.Println("Latency Meter started and it's listening at port 8080...")
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -176,11 +191,7 @@ func main() {
 	}
 
 	latencyMeasurements := NewLatencyMeasurements()
-	go measureLatency(clientset, latencyMeasurements)
+	go measureLatency(clientset, latencyMeasurements) //nuova go routine
 
-	select {}
-}
-
-func (l *LatencyMeasurements) Reset() {
-	l.data = make(map[string]*LatencyMeasurement)
+	select {} //mantiene il programma in esecuzione
 }
