@@ -1,0 +1,29 @@
+# apply new cluster and user roles for custom-scheduler and latency meter:
+kubectl apply -f scheduler-rsa
+kubectl apply -f rbca
+
+# start custom scheduler
+kubectl apply -f latency-aware-scheduler
+
+cd tests
+
+# start test
+./start.sh
+
+# stop test
+./stop.sh
+
+$ USEFUL COMMANDS:
+
+# Testing tc:
+# In the node:
+tc qdisc show dev eth0
+tc qdisc add dev eth0 root netem delay 100ms
+tc qdisc delete dev eth0 root netem
+
+# For watching
+sudo sysctl fs.inotify.max_user_instances=8192
+kubectl logs -f <pod-id>
+
+# For requested
+curl -H "X-Timestamp: $(date +%s%3N)" "http://<service_IP>/?id=123"

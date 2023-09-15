@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: latency-meter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: latency-meter
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: latency-meter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: latency-meter
+subjects:
+  - kind: ServiceAccount
+    name: latency-meter
+    namespace: default
