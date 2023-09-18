@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: liqo-telemetry
+rules:
+- apiGroups: ["virtualkubelet.liqo.io"]
+  resources: ["virtualnodes"]
+  verbs: ["list", "get"]  # aggiungi altri verbi se necessario
