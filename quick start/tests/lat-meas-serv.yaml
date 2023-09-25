@@ -12,3 +12,4 @@ spec:
       targetPort: 8080
   type: LoadBalancer
   sessionAffinity: None
+  loadBalancerIP: 10.11.185.70
