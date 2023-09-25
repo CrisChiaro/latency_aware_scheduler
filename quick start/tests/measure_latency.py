@@ -1,34 +1,25 @@
-#!/bin/bash
+import time
+import requests
+import argparse
 
-# Verifica che siano stati passati tre argomenti
-if [ "$#" -ne 3 ]; then
-    echo "Utilizzo: $0 <numero_totale_richieste> <intervallo_tra_le_richieste_in_secondi> <indirizzo_IP_servizio>"
-    exit 1
-fi
+def main(total_requests, interval, service_ip):
+    service_url = f"http://{service_ip}:8080/?id=123"
+    for i in range(total_requests):
+        headers = {"X-Timestamp": str(int(time.time() * 1000))}
+        start_time = time.time()
+        response = requests.get(service_url, headers=headers)
+        end_time = time.time()
+        
+        latency = (end_time - start_time) * 1000
+        print(f"Richiesta {i+1} - Latenza di rete: {latency:.2f} millisecondi")
+        
+        time.sleep(interval)
 
-# Numero totale di richieste da effettuare (passato come primo argomento)
-total_requests="$1"
-
-# Intervallo tra le richieste in secondi (passato come terzo argomento)
-interval="$2"
-
-# URL del servizio (passato come secondo argomento)
-service_url="http://$3:8080/?id=123"
-
-# Esegui le richieste
-for ((i=1; i<=$total_requests; i++))
-do
-    # Esegui la richiesta con curl e misura il tempo
-    start_time=$(date +%s%3N)
-    response=$(curl -H "X-Timestamp: $(date +%s%3N)" -s "$service_url")
-    end_time=$(date +%s%3N)
-
-    # Calcola la latenza
-    latency=$(( (end_time - start_time) / 2 ))
-
-    # Stampa la latenza
-    echo "Richiesta $i - Latenza di rete: $latency millisecondi"
-
-    # Attendi per l'intervallo specificato tra le richieste
-    sleep "$interval"
-done
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Misura la latenza di rete.')
+    parser.add_argument('total_requests', type=int, help='Numero totale di richieste da effettuare')
+    parser.add_argument('interval', type=int, help='Intervallo tra le richieste in secondi')
+    parser.add_argument('service_ip', type=str, help='Indirizzo IP del servizio')
+    args = parser.parse_args()
+    
+    main(args.total_requests, args.interval, args.service_ip)
