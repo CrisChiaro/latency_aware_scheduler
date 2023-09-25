@@ -146,6 +146,12 @@ curl -H "X-Timestamp: $(date +%s%3N)" "http://<service_IP>/?id=123"
 ### Multi-Cluster Issues
 Ensure all clusters have the same podCIDRs. If you encounter issues in a multi-cluster setup, consult the [Liqo](https://docs.liqo.io/en/v0.9.4/index.html) support.
 
+### Liqo Service Type
+When you are installing Liqo on your cluster, please ensure the LoadBalancer has an external IP. If not, use the option `--service-type` and choose NodePort. For example:
+```bash
+ liqoctl install kubeadm --service-type NodePort --cluster-name paris
+```
+
 ### CNI Configuration
 Properly configure your CNIs based on the podCIDRs. If this is not done, the default will be set to `10.244.0.0/16`. Using CNIs other than those mentioned in the prerequisites may result in unpredictable behavior.
 
