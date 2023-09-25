@@ -9,6 +9,9 @@ total_requests="$1"
 service_url="http://$2:8080/?id=123"
 interval="$3"
 
+# Registra il tempo di inizio dell'intero script
+script_start_time=$(date +%s%3N)
+
 for ((i=1; i<=$total_requests; i++))
 do
     start_time=$(date +%s%3N)
@@ -22,3 +25,10 @@ do
         sleep "$interval"
     fi
 done
+
+# Registra il tempo di fine dell'intero script
+script_end_time=$(date +%s%3N)
+
+# Calcola il tempo totale di esecuzione dello script
+total_execution_time=$((script_end_time - script_start_time))
+echo "Tempo totale di esecuzione: $total_execution_time millisecondi"
