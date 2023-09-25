@@ -24,7 +24,7 @@ do
     end_time=$(date +%s%3N)
 
     # Calcola la latenza
-    latency=$((end_time - start_time) / 2)
+    latency=$(( (end_time - start_time) / 2 ))
 
     # Stampa la latenza
     echo "Richiesta $i - Latenza di rete: $latency millisecondi"
