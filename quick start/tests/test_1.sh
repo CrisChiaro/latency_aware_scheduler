@@ -17,7 +17,7 @@ success_count=0  # Traccia il numero di test di successo
 for ((j=1; j<=100; j++))
 do
     # Esegui lo script start.sh all'inizio di ogni test
-    ../start.sh
+    ./start.sh
 
     echo "Inizio del test $j"
 
@@ -57,7 +57,7 @@ do
     echo "Fine del test $j. La media della latenza è: $avg_latency ms"
 
     # Esegui lo script stop.sh alla fine di ogni test
-    ../stop.sh
+    ./stop.sh
 done
 
 # Calcola e stampa il success rate
