@@ -10,7 +10,7 @@ service_url="http://$2:8080/?id=123"
 interval="$3"
 threshold="$4"
 lat_base=21  # Average base latency
-mediation_file="test_default_1.txt"
+mediation_file="results/test_default_1.txt"
 
 success_count=0  # Traccia il numero di test di successo
 
