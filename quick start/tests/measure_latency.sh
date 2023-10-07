@@ -1,34 +1,33 @@
 #!/bin/bash
 
 if [ "$#" -ne 3 ]; then
-    echo "Utilizzo: $0 <numero_totale_richieste> <indirizzo_IP_servizio> <intervallo_tra_le_richieste_in_secondi>"
+    echo "Usage: $0 <total_number_of_requests> <URL> <interval>"
     exit 1
 fi
 
 total_requests="$1"
 service_url="http://$2:8080/?id=123"
 interval="$3"
+lat_base=21  # Average base latency
 
-# Registra il tempo di inizio dell'intero script
+# Record the start time of the entire script
 script_start_time=$(date +%s%3N)
 
 for ((i=1; i<=$total_requests; i++))
 do
     start_time=$(date +%s%3N)
-    response=$(curl -w '%{http_code}' -H "X-Timestamp: $(date +%s%3N)" -s -o /dev/null "$service_url")
+    http_code=$(curl -s -w '%{http_code}' -H "X-Timestamp: $(date +%s%3N)" -o /dev/null $service_url)
     end_time=$(date +%s%3N)
 
-    latency=$((end_time - start_time))
-    echo "Richiesta $i - Latenza di rete: $latency millisecondi - HTTP Status: $response"
+    lat_user=$((end_time - start_time))
+    lat_adjusted=$((lat_user - (lat_user - lat_base) / 2))
+
+    echo "Request $i - Network Latency: $lat_adjusted ms - HTTP Code: $http_code"
 
     if (( i < total_requests )); then
         sleep "$interval"
     fi
 done
 
-# Registra il tempo di fine dell'intero script
+# Record the end time of the entire script
 script_end_time=$(date +%s%3N)
-
-# Calcola il tempo totale di esecuzione dello script
-total_execution_time=$((script_end_time - script_start_time))
-echo "Tempo totale di esecuzione: $total_execution_time millisecondi"

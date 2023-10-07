@@ -2,5 +2,6 @@
 kubectl apply -f ../latency-aware-scheduler.yaml
 sleep 6
 kubectl apply -f nginx-deployment.yaml
-#sleep 6
+kubectl wait --for=condition=available --timeout=300s deployment/nginx-deployment
 kubectl apply -f lat-meas-serv.yaml
+kubectl wait --for=condition=available --timeout=300s service/lat-meas-serv
