@@ -145,7 +145,7 @@ func (s *CustomScheduler) chooseNodeForPod(pod *v1.Pod) (*v1.Node, error) {
 }
 
 func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, error) {
-	var bestNode *v1.Node
+	var bestNodes []*v1.Node
 	var bestScore float64
 
 	appName, ok := pod.Labels["app"]
@@ -179,11 +179,26 @@ func (s *CustomScheduler) getBestNode(pod *v1.Pod, nodes []v1.Node) (*v1.Node, e
 		fmt.Println("NOT visited") //DEBUG
 		nodeScore := getNodeScore(node)
 		fmt.Println("NodeScore: ", nodeScore) //DEBUG
-		if bestNode == nil || nodeScore > bestScore {
-			bestNode = &nodes[i]
+		if bestScore < nodeScore {
+			bestNodes = []*v1.Node{&nodes[i]} // Reset the best nodes list
 			bestScore = nodeScore
-			fmt.Println("BestNode Corrente: ", bestNode.Name)
+		} else if nodeScore == bestScore {
+			bestNodes = append(bestNodes, &nodes[i]) // Add to the best nodes list
 		}
+		//DEBUG
+		fmt.Print("BEST CURRENT NODES: [")
+		for i := 0; i < len(bestNodes); i++ {
+			fmt.Print(bestNodes[i].Name, ", ")
+		}
+		fmt.Println("].")
+	}
+
+	var bestNode *v1.Node
+	if len(bestNodes) > 1 {
+		randIndex := rand.Intn(len(bestNodes))
+		bestNode = bestNodes[randIndex]
+	} else if len(bestNodes) == 1 {
+		bestNode = bestNodes[0]
 	}
 
 	if bestNode == nil {

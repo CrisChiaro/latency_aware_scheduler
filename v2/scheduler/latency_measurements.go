@@ -14,7 +14,7 @@ type LatencyMeasurement struct {
 
 type LatencyMeasurements struct {
 	sync.RWMutex
-	data map[string]map[string]map[string]*LatencyMeasurement // userID -> appName -> nodeName -> LatencyMeasurement
+	data map[string]map[string]map[string]*LatencyMeasurement // userID -> appName -> podID -> LatencyMeasurement
 }
 
 func NewLatencyMeasurements() *LatencyMeasurements {

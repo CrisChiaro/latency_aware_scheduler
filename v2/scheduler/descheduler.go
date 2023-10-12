@@ -118,7 +118,7 @@ func (d *Descheduler) getLatencyMeasurements() (map[string]map[string]map[string
 
 	for _, pod := range pods.Items {
 		// Add any necessary filters here, e.g., by labels or namespace
-		if pod.Namespace == "kube-system" || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
+		if strings.HasPrefix(pod.Namespace, "kube") || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
 			continue
 		}
 		endpoint := fmt.Sprintf("http://%s:8080/measurements", pod.Status.PodIP)
@@ -202,7 +202,7 @@ func (d *Descheduler) GetDescheduleThreshold(appName string) (int, error) {
 	}
 	fmt.Println("Calculating descheduling threshold for the app: ", appName) //DEBUG
 	for _, n := range nsList.Items {
-		if n.Name == "kube-system" || strings.HasPrefix(n.Name, "liqo") || strings.HasPrefix(n.Name, "metallb") {
+		if strings.HasPrefix(n.Namespace, "kube") || strings.HasPrefix(n.Namespace, "liqo") || strings.HasPrefix(n.Name, "metallb") {
 			continue
 		}
 
@@ -262,7 +262,7 @@ func (d *Descheduler) DescheduleAllPodsPerNode(appName string, nodeName string) 
 
 	for _, pod := range pods.Items {
 		// Add any necessary filters here, e.g., by labels or namespace
-		if pod.Namespace == "kube-system" || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
+		if strings.HasPrefix(pod.Namespace, "kube") || strings.HasPrefix(pod.Namespace, "liqo") || strings.HasPrefix(pod.Namespace, "metallb") || len(pod.Status.PodIP) == 0 { //scarto i pod di sistema o non ancora schedulati
 			continue
 		}
 		// Check if the pod's deletion policy allows it to be deleted. If not, skip to the next pod.
