@@ -11,3 +11,5 @@ spec:
     port: 80  # La porta che il servizio esporrà all'esterno
     targetPort: 80  # La porta del tuo container all'interno del pod
   type: LoadBalancer
+  sessionAffinity: None
+  clusterIP: 10.11.167.5
