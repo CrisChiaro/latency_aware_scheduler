@@ -4,4 +4,5 @@ sleep 6
 kubectl apply -f nginx-deployment.yaml
 kubectl wait --for=condition=available --timeout=300s deployment/nginx-deployment
 kubectl apply -f lat-meas-serv.yaml
-sleep 2
+sleep 3
+kubectl apply -f ../routing-manager.yaml
