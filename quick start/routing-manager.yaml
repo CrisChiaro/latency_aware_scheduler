@@ -9,6 +9,7 @@ metadata:
     default-service: "nginx"
     app-name: "nginx"  # la tua nuova annotazione
 spec:
+  serviceAccountName: routing-manager
   containers:
   - name: routing-manager
     image: crischiaro/routing-manager:latest
