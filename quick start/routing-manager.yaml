@@ -1,24 +1,23 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
-  name: routing-manager-deployment
+  name: routing-manager # il nome fisso del pod
+  namespace: routing  # il namespace in cui il pod viene creato
+  labels:
+    app: routing-manager
+  annotations:
+    default-service: "nginx"
+    app-name: "nginx"  # la tua nuova annotazione
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: routing-manager
-  template:
-    metadata:
-      labels:
-        app: routing-manager
-      annotations:
-        default-service: "nginx"
-    spec:
-      containers:
-      - name: routing-manager
-        image: crischiaro/routing-manager:latest
-        env:
-        - name: DEFAULT_SERVICE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.annotations['default-service']
+  containers:
+  - name: routing-manager
+    image: crischiaro/routing-manager:latest
+    env:
+    - name: DEFAULT_SERVICE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['default-service']
+    - name: APP_NAME  # la nuova env variabile
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['app-name']
