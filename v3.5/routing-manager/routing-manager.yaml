@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: routing-manager-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: routing-manager
+  template:
+    metadata:
+      labels:
+        app: routing-manager
+      annotations:
+        default-service: "nginx"
+    spec:
+      containers:
+      - name: routing-manager
+        image: crischiaro/routing-manager:latest
+        env:
+        - name: DEFAULT_SERVICE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['default-service']
