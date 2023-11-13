@@ -2,14 +2,15 @@
 
 ## Overview
 
-The Latency-Aware-Scheduler project consists of two main applications, both written in Golang from scratch:
+The Latency-Aware-Scheduler project consists of two main applications (three in the last version), all written in Golang from scratch:
 
 1. **Latency Meter**: Measures network latency between the user and the cluster node they are interacting with.
 2. **Custom Latency Aware Scheduler**: Replaces Kubernetes' default scheduler and schedules pods based on latency metrics.
+3. **Routing Manager(V3.5)**: Utilizes user-cluster associations to direct traffic, enhancing the scheduler's decisions. 
 
 ### Latency Meter
 
-The Latency Meter is a web application that serves as a proxy between the user and the actual service provided by a pod in a Kubernetes cluster. The purpose of this application is to be deployed on all worker nodes of the cluster. When a user interacts with a pod, the data packets pass through the Latency Meter, which measures the network latency with the user before forwarding the packets to the intended pod. The measured latency is stored in memory and made available to the Custom Latency Aware Scheduler when requested.
+The Latency Meter is a web application that serves as a proxy between the user and the actual service provided by a pod in a Kubernetes cluster. The purpose of this application is to be deployed on all worker nodes of the cluster. When an user interacts with a pod, the data packets pass through the Latency Meter, which measures the network latency with the user before forwarding the packets to the intended pod. The measured latency is stored in memory and made available to the Custom Latency Aware Scheduler when requested.
 
 ### Custom Latency Aware Scheduler
 
@@ -20,6 +21,10 @@ This custom scheduler replaces the default Kubernetes scheduler and consists of 
 - **Descheduler**: Periodically requests new latency measurements from the Latency Meter, updates the LatencyMeasurements (LM) data structure, and decides which pods to deschedule based on these measurements.
   
 - **LatencyMeasurements (LM)**: A concurrent data structure used for storing latency measurements between users and nodes.
+
+### Routing Manager (V3.5)
+The Routing Manager is  designed to dynamically direct user requests to the most appropriate pods in a Kubernetes environment. It utilizes user-cluster associations and real-time latency metrics to optimize traffic routing. It works in tandem with the Custom Latency Aware Scheduler, regularly updating associations for optimal routing.
+When an user send a request to the service, the packet pass through the Routing Manager, which checks if there is a Cluster associated to the User and forward the request to one of its pod. It employs standard load balancing methods for users without specific associations.
 
 ## Requirements
 
@@ -62,6 +67,10 @@ To use the `latency-aware-scheduler` project, you must meet the following prereq
     ```bash
     kubectl apply -f rbac.yaml
     kubectl apply -f scheduler-rsa.yaml
+    
+    # only in version 3.5:
+    kubectl create namespace routing
+    kubectl apply -f routing-rbac.yaml
     ```
 
 4. **Start the custom scheduler**
